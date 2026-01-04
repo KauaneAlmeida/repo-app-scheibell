@@ -1,0 +1,499 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum ContentType {
+  SYMPTOMS      // Sintomas
+  DIET          // Dieta
+  ACTIVITIES    // Atividades
+  CARE          // Cuidados
+  TRAINING      // Treino
+  EXAMS         // Exames
+  DOCUMENTS     // Documentos
+  MEDICATIONS   // Medicações
+  DIARY         // Diário
+}
+
+enum ContentCategory {
+  // Sintomas
+  NORMAL        // Verde - esperado
+  WARNING       // Amarelo - avisar
+  EMERGENCY     // Vermelho - emergência
+  // Dieta/Atividades
+  ALLOWED       // Permitido/Recomendado
+  RESTRICTED    // Evitar/Com moderação
+  PROHIBITED    // Proibido
+  // Genérico
+  INFO          // Informativo
+}
+
+enum AdjustmentType {
+  ADD           // Adicionar item novo
+  DISABLE       // Desativar item base
+  MODIFY        // Modificar item base
+}
+
+enum UserRole {
+  PATIENT
+  CLINIC_ADMIN
+  CLINIC_STAFF
+  THIRD_PARTY
+}
+
+enum AppointmentType {
+  RETURN_VISIT    // Retorno
+  EVALUATION      // Avaliação
+  PHYSIOTHERAPY   // Fisioterapia
+  EXAM            // Exame
+  OTHER           // Outro
+}
+
+enum AppointmentStatus {
+  PENDING         // Pendente
+  CONFIRMED       // Confirmado
+  CANCELLED       // Cancelado
+  COMPLETED       // Realizado
+}
+
+enum ExamStatus {
+  PENDING         // Aguardando resultado
+  AVAILABLE       // Resultado disponível
+  VIEWED          // Visualizado pelo paciente
+}
+
+// ==================== USUÁRIOS E CLÍNICAS ====================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          UserRole  @default(PATIENT)
+
+  clinicId      String?
+  clinic        Clinic?   @relation(fields: [clinicId], references: [id])
+
+  patient       Patient?
+  passwordResets PasswordReset[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+  @@index([clinicId])
+  @@map("users")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([code])
+  @@map("password_resets")
+}
+
+model Clinic {
+  id            String    @id @default(uuid())
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+
+  // Branding
+  logoUrl       String?
+  primaryColor  String?   @default("#4F4A34")
+  secondaryColor String?  @default("#A49E86")
+
+  users         User[]
+  patients      Patient[]
+  contents      ClinicContent[]
+  trainingProtocols TrainingProtocol[]
+
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("clinics")
+}
+
+model Patient {
+  id            String    @id @default(uuid())
+
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  clinicId      String
+  clinic        Clinic    @relation(fields: [clinicId], references: [id])
+
+  // Dados do paciente
+  cpf           String?
+  phone         String?
+  birthDate     DateTime?
+
+  // Dados da cirurgia
+  surgeryDate   DateTime?
+  surgeryType   String?
+
+  contentAdjustments   PatientContentAdjustment[]
+  appointments         Appointment[]
+  medicationLogs       MedicationLog[]
+  chatConversations    ChatConversation[]
+  exams                Exam[]
+  trainingProgress     PatientTrainingProgress[]
+  sessionCompletions   PatientSessionCompletion[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("patients")
+}
+
+// ==================== AGENDAMENTOS ====================
+
+model Appointment {
+  id          String            @id @default(uuid())
+
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  date        DateTime
+  time        String            // Horário no formato "HH:mm"
+  type        AppointmentType
+  status      AppointmentStatus @default(PENDING)
+  location    String?
+  notes       String?
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([patientId])
+  @@index([patientId, status])
+  @@index([patientId, date])
+  @@map("appointments")
+}
+
+// ==================== HISTÓRICO DE MEDICAÇÕES ====================
+
+model MedicationLog {
+  id            String    @id @default(uuid())
+
+  patientId     String
+  patient       Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  contentId     String    // ID da medicação no ClinicContent
+  takenAt       DateTime  @default(now())
+  scheduledTime String    // Horário que deveria tomar "HH:mm"
+
+  createdAt     DateTime  @default(now())
+
+  @@index([patientId])
+  @@index([patientId, takenAt])
+  @@map("medication_logs")
+}
+
+// ==================== EXAMES DO PACIENTE ====================
+
+model Exam {
+  id          String      @id @default(uuid())
+
+  patientId   String
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  title       String                    // Nome do exame (Hemograma, Ultrassom, etc)
+  type        String                    // Tipo: HEMOGRAMA, ULTRASSOM, RAIO_X, TOMOGRAFIA, etc
+  date        DateTime                  // Data do exame
+  status      ExamStatus  @default(PENDING)
+
+  fileUrl     String?                   // URL do arquivo (PDF/imagem)
+  fileName    String?                   // Nome original do arquivo
+  fileSize    Int?                      // Tamanho em bytes
+  mimeType    String?                   // Tipo MIME do arquivo
+
+  notes       String?                   // Observações do médico
+  result      String?                   // Resultado resumido
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([patientId])
+  @@index([patientId, status])
+  @@index([patientId, date])
+  @@map("exams")
+}
+
+// ==================== TEMPLATES DO SISTEMA ====================
+// Conteúdos padrão copiados automaticamente para toda nova clínica
+
+model SystemContentTemplate {
+  id              String          @id @default(uuid())
+
+  type            ContentType
+  category        ContentCategory
+
+  title           String
+  description     String?
+
+  // Relevância por dia pós-operatório
+  validFromDay    Int?
+  validUntilDay   Int?
+
+  sortOrder       Int             @default(0)
+  isActive        Boolean         @default(true)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([type])
+  @@index([type, category])
+  @@map("system_content_templates")
+}
+
+// ==================== CONTEÚDOS DA CLÍNICA ====================
+// Copiados dos templates + customizações da clínica
+
+model ClinicContent {
+  id              String          @id @default(uuid())
+
+  clinicId        String
+  clinic          Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  // Referência ao template original
+  templateId      String?
+
+  type            ContentType
+  category        ContentCategory
+
+  title           String
+  description     String?
+
+  validFromDay    Int?
+  validUntilDay   Int?
+
+  sortOrder       Int             @default(0)
+  isActive        Boolean         @default(true)
+  isCustom        Boolean         @default(false)  // true = criado pela clínica
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  patientAdjustments PatientContentAdjustment[]
+
+  @@index([clinicId])
+  @@index([clinicId, type])
+  @@index([clinicId, type, category])
+  @@index([clinicId, type, isActive])
+  @@map("clinic_contents")
+}
+
+// ==================== AJUSTES POR PACIENTE ====================
+
+model PatientContentAdjustment {
+  id              String          @id @default(uuid())
+
+  patientId       String
+  patient         Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Referência ao conteúdo base (null se for ADD)
+  baseContentId   String?
+  baseContent     ClinicContent?  @relation(fields: [baseContentId], references: [id], onDelete: Cascade)
+
+  adjustmentType  AdjustmentType
+
+  // Dados para ADD ou MODIFY
+  contentType     ContentType?
+  category        ContentCategory?
+  title           String?
+  description     String?
+  validFromDay    Int?
+  validUntilDay   Int?
+
+  // Motivo médico
+  reason          String?
+
+  isActive        Boolean         @default(true)
+  createdBy       String?
+  createdAt       DateTime        @default(now())
+
+  @@index([patientId])
+  @@index([baseContentId])
+  @@map("patient_content_adjustments")
+}
+
+// ==================== TREINO / PROTOCOLO DE EXERCÍCIOS ====================
+
+enum TrainingWeekStatus {
+  COMPLETED   // Semana concluída
+  CURRENT     // Semana atual
+  FUTURE      // Semana futura/bloqueada
+}
+
+/// Protocolo de treino padrão (configurado pela clínica ou sistema)
+model TrainingProtocol {
+  id              String    @id @default(uuid())
+
+  clinicId        String?
+  clinic          Clinic?   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  name            String    // Nome do protocolo (ex: "Rinoplastia Padrão")
+  surgeryType     String?   // Tipo de cirurgia associada
+  description     String?
+  totalWeeks      Int       @default(8)
+
+  isDefault       Boolean   @default(false)  // Protocolo padrão do sistema
+  isActive        Boolean   @default(true)
+
+  weeks           TrainingWeek[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([clinicId])
+  @@index([isDefault])
+  @@map("training_protocols")
+}
+
+/// Semana do protocolo de treino
+model TrainingWeek {
+  id              String    @id @default(uuid())
+
+  protocolId      String
+  protocol        TrainingProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  weekNumber      Int       // Número da semana (1, 2, 3, ...)
+  title           String    // "Semana 1", "Semana 2", etc
+  dayRange        String    // "Dias 1-7", "Dias 8-14", etc
+  objective       String    // Objetivo da semana
+  maxHeartRate    Int?      // Frequência cardíaca máxima (ex: 90)
+  heartRateLabel  String?   // Label da FC (ex: "FC Basal + 25 bpm")
+
+  canDo           String[]  // Lista de exercícios permitidos
+  avoid           String[]  // Lista de atividades a evitar
+
+  sortOrder       Int       @default(0)
+
+  sessions        TrainingSession[]
+  progress        PatientTrainingProgress[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([protocolId, weekNumber])
+  @@index([protocolId])
+  @@map("training_weeks")
+}
+
+/// Sessão de treino (ex: 3 sessões por semana)
+model TrainingSession {
+  id              String    @id @default(uuid())
+
+  weekId          String
+  week            TrainingWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  sessionNumber   Int       // Número da sessão na semana (1, 2, 3, ...)
+  name            String    // Nome da sessão (ex: "Caminhada leve")
+  description     String?   // Descrição ou instruções
+  duration        Int?      // Duração em minutos
+  intensity       String?   // Intensidade (ex: "Leve", "Moderada")
+
+  sortOrder       Int       @default(0)
+
+  completions     PatientSessionCompletion[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([weekId, sessionNumber])
+  @@index([weekId])
+  @@map("training_sessions")
+}
+
+/// Progresso do paciente na semana
+model PatientTrainingProgress {
+  id              String    @id @default(uuid())
+
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  weekId          String
+  week            TrainingWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  status          TrainingWeekStatus @default(FUTURE)
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([patientId, weekId])
+  @@index([patientId])
+  @@index([patientId, status])
+  @@map("patient_training_progress")
+}
+
+/// Registro de conclusão de sessão de treino
+model PatientSessionCompletion {
+  id              String    @id @default(uuid())
+
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  sessionId       String
+  session         TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  completedAt     DateTime  @default(now())
+  notes           String?   // Observações do paciente
+
+  @@unique([patientId, sessionId])
+  @@index([patientId])
+  @@index([patientId, completedAt])
+  @@map("patient_session_completions")
+}
+
+// ==================== CHAT IA ====================
+
+model ChatConversation {
+  id          String        @id @default(uuid())
+
+  patientId   String
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  messages    ChatMessage[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([patientId])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              String           @id @default(uuid())
+
+  conversationId  String
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role            String           // 'user' | 'assistant' | 'system'
+  content         String
+
+  createdAt       DateTime         @default(now())
+
+  @@index([conversationId])
+  @@map("chat_messages")
+}

@@ -1,0 +1,105 @@
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateAppointmentDto, UpdateStatusDto } from './dto';
+import { AppointmentStatus } from '@prisma/client';
+export declare class AppointmentsService {
+    private prisma;
+    constructor(prisma: PrismaService);
+    getPatientAppointments(patientId: string, status?: AppointmentStatus): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }[]>;
+    getUpcomingAppointments(patientId: string, limit?: number): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }[]>;
+    getAppointmentById(id: string, patientId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }>;
+    createAppointment(patientId: string, dto: CreateAppointmentDto): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }>;
+    updateStatus(id: string, patientId: string, dto: UpdateStatusDto): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }>;
+    cancelAppointment(id: string, patientId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }>;
+    confirmAppointment(id: string, patientId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        patientId: string;
+        description: string | null;
+        title: string;
+        status: import(".prisma/client").$Enums.AppointmentStatus;
+        notes: string | null;
+        type: import(".prisma/client").$Enums.AppointmentType;
+        date: Date;
+        time: string;
+        location: string | null;
+    }>;
+}
